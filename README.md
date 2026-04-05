@@ -30,3 +30,7 @@ The variables are:
   PKCS #8 DER format.  
   Ex file: `testkey.pk8`  
   The password must be empty.
+
+## CREDITS:
+
+- [Android Stub APK Maker](https://github.com/s1204IT/Android-Stub-APK-Maker) by [s1204IT](https://github.com/s1204IT)
