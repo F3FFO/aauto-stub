@@ -1,7 +1,6 @@
 name: Build
 
 on:
-  push:
   workflow_dispatch:
     inputs:
       package:
@@ -20,6 +19,16 @@ on:
           description: "App name"
           required: false
           default: ""
+      version_code:
+          type: string
+          description: "Version code (integer)"
+          required: false
+          default: "1"
+      version_name:
+          type: string
+          description: "Version name (e.g. 1.0.1)"
+          required: false
+          default: "1.0"
       sign:
           type: boolean
           description: Custom signing
@@ -53,6 +62,14 @@ jobs:
           else
             sed -i -e '/label=/d' AndroidManifest.xml
           fi
+          # Set version code
+          if [ "${{ inputs.version_code }}" != "" ]; then
+            sed -i -e 's/android:versionCode=\"[0-9]*\"/android:versionCode=\"${{ inputs.version_code }}\"/' AndroidManifest.xml
+          fi
+          # Set version name
+          if [ "${{ inputs.version_name }}" != "" ]; then
+            sed -i -e 's/android:versionName=\"[^\"]*\"/android:versionName=\"${{ inputs.version_name }}\"/' AndroidManifest.xml
+          fi
 
       - name: Setup custom signature
         if: ${{ inputs.sign }}
@@ -61,12 +78,33 @@ jobs:
           echo "${{ secrets.KEY }}" | base64 -d > data/cert.pk8
 
       - name: Make
+        id: build
         run: |
           export PATH=$PATH:$ANDROID_HOME/build-tools/35.0.1
-          ./build.sh "${{ inputs.min_sdk }}"
+          # Create APK file using package and app_name
+          PKG="${{ inputs.package }}"
+          APPNAME="${{ inputs.app_name }}"
+          SAFE_PKG=$(echo "$PKG" | tr '.' '_')
+          SAFE_APP=$(echo "$APPNAME" | tr ' ' '_' | tr -cd '[:alnum:]_')
+          if [ -n "$SAFE_APP" ]; then
+            OUT_APK="${SAFE_PKG}_${SAFE_APP}.apk"
+          else
+            OUT_APK="${SAFE_PKG}.apk"
+          fi
+          ./build.sh "${{ inputs.min_sdk }}" "$OUT_APK"
+          echo "apk_file=$OUT_APK" >> $GITHUB_OUTPUT
+
+      - name: Verify APK exists
+        run: |
+          if [ ! -f "${{ steps.build.outputs.apk_file }}" ]; then
+            echo "Error: APK file not found: ${{ steps.build.outputs.apk_file }}"
+            exit 1
+          fi
+          ls -lh "${{ steps.build.outputs.apk_file }}"
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: "stub"
-          path: "stub.apk"
+          name: "${{ steps.build.outputs.apk_file }}"
+          path: "${{ steps.build.outputs.apk_file }}"
+          retention-days: 30
